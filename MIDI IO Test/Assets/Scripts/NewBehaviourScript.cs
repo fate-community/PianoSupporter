@@ -4,29 +4,38 @@ using UnityEngine;
 using Melanchall.DryWetMidi.Core;
 using Melanchall.DryWetMidi.Interaction;
 using Melanchall.DryWetMidi.Multimedia;
+using System.Linq;
 
 public class NewBehaviourScript : MonoBehaviour
 {
     MidiFile midi;
+    TempoMap tempoMap;
+    ValueChange<Tempo>[] tempoChanges;
     Note[] notes;
+    Transform noteInitPoint;
     GameObject[] noteInstances;
     GameObject noteObj;
     public float scale = 1.0f;
+    float scrollSpeedByTempo;
     static InputDevice _inputDevice;
-    Action<TimedEvent> _midiEvent;
+
+    bool isPlay = false;
 
     void Start()
     {
-        midi = MidiFile.Read($"{Application.dataPath}/Midis/BUTTERFLY_.mid");
+        noteInitPoint = GameObject.Find("Notes").transform;
+        midi = MidiFile.Read($"{Application.dataPath}/Midis/b9IsAwesome.mid");
+        tempoMap = midi.GetTempoMap();
+        tempoChanges = tempoMap.GetTempoChanges().ToArray();
+        scrollSpeedByTempo = 500000.0f / tempoChanges[0].Value.MicrosecondsPerQuarterNote;
         notes = new Note[midi.GetNotes().Count];
         midi.GetNotes().CopyTo(notes, 0);
         Debug.Log($"Note Count: {notes.Length}");
-        TempoMap tempoMap = midi.GetTempoMap();
         noteInstances = new GameObject[notes.Length];
         noteObj = Resources.Load("Prefabs/Note") as GameObject;
         for (int i = 0; i < notes.Length; i++)
         {
-            noteInstances[i] = Instantiate(noteObj);
+            noteInstances[i] = Instantiate(noteObj, noteInitPoint);
             noteInstances[i].transform.localScale = new Vector3(0.5f, 0.5f, (notes[i].EndTime - notes[i].Time) / 480.0f * scale);
             noteInstances[i].transform.position = new Vector3(notes[i].NoteNumber * 0.5f - 30.0f, 0, (((notes[i].EndTime - notes[i].Time) / 2.0f) + notes[i].Time) / 480.0f * scale);
         }
@@ -42,18 +51,22 @@ public class NewBehaviourScript : MonoBehaviour
         {
             Debug.Log(e.Message);
         }
-        _midiEvent += EventTest;
+    }
+
+    void Update()
+    {
+        if (isPlay)
+            ScrollNotes();
     }
 
     public void PlayMidi()
     {
-        midi.Play(OutputDevice.GetByIndex(0));
-        midi.ProcessTimedEvents(_midiEvent);
+        isPlay = true;
     }
 
-    public void EventTest(TimedEvent e)
+    void ScrollNotes()
     {
-        Debug.Log("Event");
+        noteInitPoint.Translate(new Vector3(0, 0, -2 * scrollSpeedByTempo * scale * Time.deltaTime));
     }
 
     static void OnEventReceived(object sender, MidiEventReceivedEventArgs e)
